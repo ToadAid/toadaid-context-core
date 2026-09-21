@@ -25,6 +25,7 @@ const PAYLOAD_KEYS = Object.freeze([
 
 const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
 const unique = values => [...new Set(values)];
+const compareCodeUnits = (left, right) => left < right ? -1 : left > right ? 1 : 0;
 
 function assertPlainObject(value, label) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -95,7 +96,11 @@ function postingsForPayload(payload, candidateDigest) {
       rows.push(Object.freeze({ chunkId: payload.chunkId, lane, term, candidateDigest }));
     }
   }
-  rows.sort((a, b) => a.lane.localeCompare(b.lane) || a.term.localeCompare(b.term) || a.chunkId.localeCompare(b.chunkId));
+  rows.sort((a, b) =>
+    compareCodeUnits(a.lane, b.lane) ||
+    compareCodeUnits(a.term, b.term) ||
+    compareCodeUnits(a.chunkId, b.chunkId)
+  );
   return Object.freeze(rows);
 }
 
