@@ -906,6 +906,140 @@ export class PersistentLexicalIndex {
     });
   }
 
+
+  resolveSourceReference(reference) {
+    this.#assertRecallIntegrityEpoch();
+
+    if (
+      reference === null ||
+      typeof reference !== "object" ||
+      Array.isArray(reference)
+    ) {
+      throw new ContextCoreError(
+        "source reference must be an object"
+      );
+    }
+
+    const {
+      sourceId,
+      contentDigest,
+    } = reference;
+
+    if (
+      typeof sourceId !== "string" ||
+      sourceId.length === 0
+    ) {
+      throw new ContextCoreError(
+        "source reference sourceId must be a non-empty string"
+      );
+    }
+
+    if (
+      typeof contentDigest !== "string" ||
+      !/^[0-9a-f]{64}$/.test(contentDigest)
+    ) {
+      throw new ContextCoreError(
+        "source reference contentDigest must be a lowercase sha256 hex digest"
+      );
+    }
+
+    const publicRef =
+      this.#publicRef(sourceId);
+
+    if (
+      publicRef.contentDigest !==
+      contentDigest
+    ) {
+      throw new ContextCoreError(
+        `source reference content digest mismatch for ${sourceId}`
+      );
+    }
+
+    const source = this.db
+      .prepare(`
+        SELECT
+          classification,
+          content_digest,
+          metadata_json,
+          metadata_digest
+        FROM sources
+        WHERE source_id = ?
+      `)
+      .get(sourceId);
+
+    if (!source) {
+      throw new ContextCoreError(
+        `source ${sourceId} is missing`
+      );
+    }
+
+    if (
+      source.metadata_digest === null ||
+      sha256(source.metadata_json) !==
+        source.metadata_digest
+    ) {
+      throw new ContextCoreError(
+        `stored metadata integrity mismatch for ${sourceId}`
+      );
+    }
+
+    const metadata =
+      parseJson(
+        source.metadata_json,
+        "metadata"
+      );
+
+    if (
+      metadata === null ||
+      typeof metadata !== "object" ||
+      Array.isArray(metadata)
+    ) {
+      throw new ContextCoreError(
+        `stored metadata for ${sourceId} must be an object`
+      );
+    }
+
+    const chunks = this.db
+      .prepare(`
+        SELECT
+          chunk_index,
+          content
+        FROM chunks
+        WHERE source_id = ?
+        ORDER BY chunk_index ASC
+      `)
+      .all(sourceId);
+
+    const content =
+      chunks
+        .map(chunk => chunk.content)
+        .join("");
+
+    if (
+      sha256(content) !==
+      contentDigest
+    ) {
+      throw new ContextCoreError(
+        `resolved source integrity mismatch for ${sourceId}`
+      );
+    }
+
+    return Object.freeze({
+      version: 1,
+      kind: "RESOLVED_SOURCE_REFERENCE",
+      sourceId,
+      classification:
+        source.classification,
+      contentDigest,
+      bytes: bytes(content),
+      content,
+      metadata:
+        Object.freeze({
+          ...metadata,
+        }),
+    });
+  }
+
   addSource({
     sourceId,
     content,

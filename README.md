@@ -213,7 +213,27 @@ That output remains inline and receives zero fictional savings credit.
 
 ## Recovering deferred detail
 
-A deferred tool result returns a bounded `CONTEXT_REFERENCE`. The exact omitted material stays in retrieval under canonical provenance metadata.
+A deferred tool result returns a bounded `CONTEXT_REFERENCE`. The reference carries the stable `sourceId` plus the exact `contentDigest`; the omitted bytes stay in integrity-bound retrieval under canonical provenance metadata.
+
+When the agent/runtime needs **that exact omitted source**, the host can explicitly resolve the reference:
+
+```js
+import {
+  resolveContextReference,
+} from "@toadaid/context-core";
+
+const exact = resolveContextReference({
+  retrieval,
+  reference: routed.modelText,
+});
+
+// Host decides whether/how to re-inject exact.content.
+// Context Core does not invoke a tool or push it into a model.
+```
+
+Resolution is read-only, digest-verified, restart-safe with `PersistentLexicalIndex`, and returns the exact original source bytes plus stored provenance metadata. A changed digest, classification, byte count, or missing source fails closed.
+
+For bounded semantic recall across deferred material, use lexical retrieval:
 
 ```js
 const recovered = retrieval.search(
