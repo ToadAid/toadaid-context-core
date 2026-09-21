@@ -164,6 +164,22 @@ export type LexicalSourceRef = Readonly<{
   }>[];
 }>;
 
+export type SourceReferenceIdentity = Readonly<{
+  sourceId: string;
+  contentDigest: string;
+}>;
+
+export type ResolvedLexicalSource = Readonly<{
+  version: 1;
+  kind: "RESOLVED_SOURCE_REFERENCE";
+  sourceId: string;
+  classification: ContextClassValue;
+  contentDigest: string;
+  bytes: number;
+  content: string;
+  metadata: Readonly<Record<string, JsonValue>>;
+}>;
+
 export type LexicalSearchResult = Readonly<{
   sourceId: string;
   chunkId: string;
@@ -201,6 +217,9 @@ export class PersistentLexicalIndex {
   readonly k1: number;
   readonly b: number;
   addSource(input: LexicalSourceInput): LexicalSourceRef;
+  resolveSourceReference(
+    reference: SourceReferenceIdentity
+  ): ResolvedLexicalSource;
   search(
     query: string,
     options?: {
@@ -390,6 +409,27 @@ export function prepareContextIngress(
     chunkMode?: "plain" | "markdown";
   }>
 ): ContextIngressResult;
+
+export type ContextReferenceMarker = Readonly<{
+  version: 1;
+  kind: "CONTEXT_REFERENCE";
+  sourceId: string;
+  classification: ContextClassValue;
+  contentDigest: string;
+  rawBytes: number;
+  preview?: string;
+  previewTruncated?: boolean;
+}>;
+
+export function resolveContextReference(
+  input: Readonly<{
+    retrieval: Pick<
+      PersistentLexicalIndex,
+      "resolveSourceReference"
+    >;
+    reference: string | ContextReferenceMarker;
+  }>
+): ResolvedLexicalSource;
 
 export type ToolOutputIngressResult = Readonly<{
   version: 1;
