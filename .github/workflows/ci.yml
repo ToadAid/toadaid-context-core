@@ -1,0 +1,57 @@
+name: hp-ci
+
+# Runs ONLY on push to main and explicit workflow_dispatch.
+#
+# Trust boundary: this workflow runs on the ToadAid self-hosted HP runner.
+# It MUST NOT trigger on pull_request or any equivalent untrusted PR event.
+# Untrusted PR source is verified by pr-ci.yml on GitHub-hosted infrastructure.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: HP isolated verification
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - hp
+      - toadaid-context-core
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Runner preflight
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf 'runner_user: '
+          id -un
+          printf 'runner_host: '
+          hostname
+          printf 'bwrap: '
+          bwrap --version
+          printf 'node: '
+          node --version
+
+          test "$(id -un)" = "context-core-ci"
+          test -x ./scripts/ci-bwrap.sh
+
+      - name: Isolated Context Core verification
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./scripts/ci-bwrap.sh "$GITHUB_WORKSPACE"

@@ -1,0 +1,40 @@
+{
+  "name": "@toadaid/context-core",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs",
+      "default": "./src/index.mjs"
+    }
+  },
+  "description": "Provider-neutral context infrastructure for agents: exact evidence, bounded retrieval, continuity, provenance, and zero execution authority.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node bin/demo.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ToadAid/toadaid-context-core.git"
+  },
+  "homepage": "https://github.com/ToadAid/toadaid-context-core#readme",
+  "bugs": {
+    "url": "https://github.com/ToadAid/toadaid-context-core/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "context",
+    "retrieval",
+    "provenance",
+    "continuity"
+  ]
+}

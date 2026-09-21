@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "toadaid-context-core-retrieval-quality",
+  "corpusVersion": "1.0.0",
+  "provenance": {
+    "origin": "TOADAID_CONTEXT_CORE_HAND_AUTHORED_SYNTHETIC_FIXTURE",
+    "createdDate": "2026-09-19",
+    "purpose": "Deterministic lexical retrieval regression and adversarial quality evaluation",
+    "license": "PROJECT_INTERNAL_TEST_FIXTURE"
+  },
+  "sources": [
+    {
+      "sourceId": "doc:telemetry",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "Context savings report records observed raw bytes, ingress context bytes, retrieval response bytes, gross bytes avoided, net bytes avoided, and net bytes added. Retrieval bytes mean serialized response bytes returned to the caller, not model input proof."
+    },
+    {
+      "sourceId": "doc:api",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "The public API exports buildContextSavingsReport and verifyContextSavingsReport. The report uses UTF8_BYTES and BYTE_ACCOUNTING_ONLY semantics."
+    },
+    {
+      "sourceId": "doc:continuity",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "Continuity handoff rebuilds a bounded resume packet, then performs explicit retrieval queries. Exact evidence remains separate from prose facts and cannot be silently truncated."
+    },
+    {
+      "sourceId": "doc:quality",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "The retrievalQualityLab evaluates lexical retrieval quality. It measures precision, recall, reciprocal rank, normalized discounted cumulative gain, false positives, typo cases, and cross style identifier cases."
+    },
+    {
+      "sourceId": "doc:authority",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "Context Core has zero execution authority. Wallet access, trade execution, shell execution, git write, network access, and durable memory writes remain false."
+    },
+    {
+      "sourceId": "doc:distractor",
+      "classification": "RETRIEVABLE_KNOWLEDGE",
+      "content": "A garden pond contains lotus flowers, stone paths, rainwater, frogs, and quiet reflections. This source intentionally distracts unrelated retrieval queries."
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "telemetry-exact",
+      "query": "context savings report retrieval response bytes",
+      "relevantSourceIds": [
+        "doc:telemetry"
+      ],
+      "k": 2,
+      "recall": "exact",
+      "match": "all",
+      "tags": [
+        "STANDARD"
+      ]
+    },
+    {
+      "caseId": "continuity-exact",
+      "query": "continuity handoff resume packet",
+      "relevantSourceIds": [
+        "doc:continuity"
+      ],
+      "k": 2,
+      "recall": "exact",
+      "match": "all",
+      "tags": [
+        "STANDARD"
+      ]
+    },
+    {
+      "caseId": "api-cross-style-snake",
+      "query": "build_context_savings_report",
+      "relevantSourceIds": [
+        "doc:api"
+      ],
+      "k": 2,
+      "recall": "tiered",
+      "match": "all",
+      "tags": [
+        "CROSS_STYLE_IDENTIFIER"
+      ]
+    },
+    {
+      "caseId": "quality-cross-style-snake",
+      "query": "retrieval_quality_lab",
+      "relevantSourceIds": [
+        "doc:quality"
+      ],
+      "k": 2,
+      "recall": "tiered",
+      "match": "all",
+      "tags": [
+        "CROSS_STYLE_IDENTIFIER"
+      ]
+    },
+    {
+      "caseId": "quality-identifier-typo",
+      "query": "retrievaQualityLab",
+      "relevantSourceIds": [
+        "doc:quality"
+      ],
+      "k": 2,
+      "recall": "tiered",
+      "match": "all",
+      "tags": [
+        "TYPO"
+      ]
+    },
+    {
+      "caseId": "continuity-ordinary-typo",
+      "query": "contnuity handoff",
+      "relevantSourceIds": [
+        "doc:continuity"
+      ],
+      "k": 2,
+      "recall": "tiered",
+      "match": "all",
+      "tags": [
+        "TYPO"
+      ]
+    },
+    {
+      "caseId": "authority-adversarial",
+      "query": "wallet trade shell network authority",
+      "relevantSourceIds": [
+        "doc:authority"
+      ],
+      "k": 3,
+      "recall": "exact",
+      "match": "all",
+      "tags": [
+        "ADVERSARIAL"
+      ]
+    }
+  ],
+  "exactEvidenceCases": [
+    {
+      "caseId": "exact-evidence-canary",
+      "sourceId": "exact:canary",
+      "content": "EXACT_ONLY_CANARY_7f31d5 canonical reviewed HEAD must remain byte-for-byte unchanged.",
+      "query": "EXACT_ONLY_CANARY_7f31d5",
+      "maxInlineBytes": 1,
+      "previewBytes": 8
+    }
+  ]
+}
