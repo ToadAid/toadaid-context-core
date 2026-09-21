@@ -217,6 +217,18 @@ export class PersistentLexicalIndex {
   readonly k1: number;
   readonly b: number;
   addSource(input: LexicalSourceInput): LexicalSourceRef;
+  deleteSource(sourceId: string): Readonly<{
+    sourceId: string;
+    sourceDeleted: true;
+    chunksRemoved: number;
+    ftsRowsRemoved: number;
+  }>;
+  repairOrphanFtsRows(): Readonly<{
+    orphanRowsRemoved: number;
+    canonicalChunkRows: number;
+    ftsRows: number;
+    orphanRowsRemaining: number;
+  }>;
   resolveSourceReference(
     reference: SourceReferenceIdentity
   ): ResolvedLexicalSource;

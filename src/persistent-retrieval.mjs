@@ -1353,6 +1353,163 @@ export class PersistentLexicalIndex {
     return this.#publicRef(sourceId);
   }
 
+  deleteSource(sourceId) {
+    this.#assertRecallIntegrityEpoch();
+
+    if (!sourceId || typeof sourceId !== "string") {
+      throw new ContextCoreError("sourceId must be a non-empty string");
+    }
+
+    this.db.exec("BEGIN IMMEDIATE");
+
+    try {
+      // Deletion may never erase evidence of an already-corrupt derived
+      // index. Prove the complete FTS projection before touching either side.
+      this.#verifyFtsIntegrity();
+
+      const source = this.db
+        .prepare(`
+          SELECT source_id
+          FROM sources
+          WHERE source_id = ?
+        `)
+        .get(sourceId);
+
+      if (!source) {
+        throw new ContextCoreError(`source ${sourceId} is missing`);
+      }
+
+      const chunks = this.db
+        .prepare(`
+          SELECT chunk_id
+          FROM chunks
+          WHERE source_id = ?
+          ORDER BY chunk_index ASC
+        `)
+        .all(sourceId);
+
+      const deleteFts = this.db.prepare(`
+        DELETE FROM chunks_fts
+        WHERE chunk_id = ?
+      `);
+
+      let ftsRowsRemoved = 0;
+      for (const chunk of chunks) {
+        const result = deleteFts.run(chunk.chunk_id);
+        if (Number(result.changes) !== 1) {
+          throw new ContextCoreError(
+            `FTS deletion integrity mismatch for ${chunk.chunk_id}`
+          );
+        }
+        ftsRowsRemoved += Number(result.changes);
+      }
+
+      const deleted = this.db
+        .prepare(`
+          DELETE FROM sources
+          WHERE source_id = ?
+        `)
+        .run(sourceId);
+
+      if (Number(deleted.changes) !== 1) {
+        throw new ContextCoreError(
+          `source deletion integrity mismatch for ${sourceId}`
+        );
+      }
+
+      // Foreign keys remove chunks and every canonical derived child. The
+      // FTS5 table is not an FK participant, so it was handled explicitly.
+      this.#verifyFtsIntegrity();
+      this.db.exec("COMMIT");
+
+      this.#acceptRecallIntegrityEpoch();
+      return Object.freeze({
+        sourceId,
+        sourceDeleted: true,
+        chunksRemoved: chunks.length,
+        ftsRowsRemoved,
+      });
+    } catch (error) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {}
+      throw error;
+    }
+  }
+
+  repairOrphanFtsRows() {
+    this.#assertRecallIntegrityEpoch();
+    this.db.exec("BEGIN IMMEDIATE");
+
+    try {
+      const orphans = this.db
+        .prepare(`
+          SELECT f.rowid
+          FROM chunks_fts AS f
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM chunks AS c
+            WHERE c.chunk_id = f.chunk_id
+          )
+          ORDER BY f.rowid ASC
+        `)
+        .all();
+
+      const deleteOrphan = this.db.prepare(`
+        DELETE FROM chunks_fts
+        WHERE rowid = ?
+      `);
+
+      let orphanRowsRemoved = 0;
+      for (const orphan of orphans) {
+        const result = deleteOrphan.run(orphan.rowid);
+        if (Number(result.changes) !== 1) {
+          throw new ContextCoreError(
+            `orphan FTS deletion integrity mismatch for rowid ${orphan.rowid}`
+          );
+        }
+        orphanRowsRemoved += Number(result.changes);
+      }
+
+      // This intentionally reuses the normal strict verifier. Missing rows,
+      // duplicates, altered lexical payloads, or any other inconsistency make
+      // the maintenance transaction roll back in full.
+      this.#verifyFtsIntegrity();
+
+      const counts = this.db
+        .prepare(`
+          SELECT
+            (SELECT count(*) FROM chunks) AS canonical_chunk_rows,
+            (SELECT count(*) FROM chunks_fts) AS fts_rows,
+            (
+              SELECT count(*)
+              FROM chunks_fts AS f
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM chunks AS c
+                WHERE c.chunk_id = f.chunk_id
+              )
+            ) AS orphan_rows_remaining
+        `)
+        .get();
+
+      this.db.exec("COMMIT");
+      this.#acceptRecallIntegrityEpoch();
+
+      return Object.freeze({
+        orphanRowsRemoved,
+        canonicalChunkRows: Number(counts.canonical_chunk_rows),
+        ftsRows: Number(counts.fts_rows),
+        orphanRowsRemaining: Number(counts.orphan_rows_remaining),
+      });
+    } catch (error) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {}
+      throw error;
+    }
+  }
+
   #verifyFtsIntegrity() {
     const chunks = this.db
       .prepare(`
