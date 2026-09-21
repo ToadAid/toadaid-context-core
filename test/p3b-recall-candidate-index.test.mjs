@@ -15,6 +15,8 @@ import {
   contextCoreCapabilities,
 } from "../src/index.mjs";
 import {
+  buildRecallCandidateIndex,
+  decodeRecallCandidateIndex,
   RECALL_CANDIDATE_INDEX_VERSION,
   RecallCandidateLane,
 } from "../src/recall-candidate-index.mjs";
@@ -32,6 +34,140 @@ function withDb(t, fn) {
   const dbPath = path.join(root, "context.sqlite");
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return fn(dbPath);
+}
+
+const postingKey = posting => JSON.stringify([
+  posting.chunk_id ?? posting.chunkId,
+  posting.lane,
+  posting.term,
+  posting.candidate_digest ?? posting.candidateDigest,
+]);
+
+function seedUnicodeCandidateDatabase(dbPath) {
+  const index = new PersistentLexicalIndex({ path: dbPath });
+  add(index, "unicode-candidate", "zebra éclair ångström");
+  index.close();
+}
+
+test("P8-P1 generated posting order is deterministic and locale-independent", () => {
+  const candidate = buildRecallCandidateIndex({
+    chunkId: "unicode:0",
+    chunkDigest: "0".repeat(64),
+    projectionDigest: "1".repeat(64),
+    exactTokens: ["éclair", "zebra", "ångström"],
+    derivedRecall: {
+      identifierTokens: [],
+      morphologyTokens: [],
+      fragmentTokens: [],
+    },
+  });
+
+  assert.deepEqual(
+    candidate.postings
+      .filter(posting => posting.lane === RecallCandidateLane.EXACT)
+      .map(posting => posting.term),
+    ["zebra", "ångström", "éclair"]
+  );
+});
+
+test("P8-P1 reopens Unicode postings by exact set despite SQLite and locale ordering differences", t => withDb(t, dbPath => {
+  seedUnicodeCandidateDatabase(dbPath);
+
+  const db = new DatabaseSync(dbPath);
+  const binding = db.prepare(`
+    SELECT
+      m.candidate_json,
+      m.candidate_digest,
+      c.chunk_id,
+      c.digest AS chunk_digest,
+      rp.projection_digest
+    FROM recall_candidate_manifests AS m
+    JOIN chunks AS c ON c.chunk_id = m.chunk_id
+    JOIN recall_projections AS rp ON rp.chunk_id = m.chunk_id
+  `).get();
+  const expected = decodeRecallCandidateIndex({
+    serialized: binding.candidate_json,
+    candidateDigest: binding.candidate_digest,
+    expectedChunkId: binding.chunk_id,
+    expectedChunkDigest: binding.chunk_digest,
+    expectedProjectionDigest: binding.projection_digest,
+  }).postings;
+  const sqliteOrdered = db.prepare(`
+    SELECT chunk_id, lane, term, candidate_digest
+    FROM recall_candidate_terms
+    ORDER BY lane ASC, term ASC, chunk_id ASC
+  `).all();
+  const localeOrdered = [...sqliteOrdered].sort((left, right) =>
+    left.lane.localeCompare(right.lane) ||
+    left.term.localeCompare(right.term) ||
+    left.chunk_id.localeCompare(right.chunk_id)
+  );
+
+  assert.notDeepEqual(
+    sqliteOrdered.map(postingKey),
+    localeOrdered.map(postingKey)
+  );
+  assert.equal(sqliteOrdered.length, expected.length);
+  assert.deepEqual(
+    new Set(sqliteOrdered.map(postingKey)),
+    new Set(expected.map(postingKey))
+  );
+  db.close();
+
+  const reopened = new PersistentLexicalIndex({ path: dbPath });
+  try {
+    assert.equal(
+      reopened.search("éclair", { recall: "tiered" }).results[0].sourceId,
+      "unicode-candidate"
+    );
+  } finally {
+    reopened.close();
+  }
+}));
+
+for (const [label, mutate] of [
+  ["deleted", db => db.prepare(`
+    DELETE FROM recall_candidate_terms
+    WHERE rowid = (SELECT rowid FROM recall_candidate_terms LIMIT 1)
+  `).run()],
+  ["extra", db => {
+    const row = db.prepare(`
+      SELECT chunk_id, candidate_digest
+      FROM recall_candidate_terms
+      LIMIT 1
+    `).get();
+    db.prepare(`
+      INSERT INTO recall_candidate_terms(chunk_id, lane, term, candidate_digest)
+      VALUES (?, ?, ?, ?)
+    `).run(row.chunk_id, RecallCandidateLane.EXACT, "unexpected", row.candidate_digest);
+  }],
+  ["candidate_digest changed", db => db.prepare(`
+    UPDATE recall_candidate_terms
+    SET candidate_digest = ?
+    WHERE rowid = (SELECT rowid FROM recall_candidate_terms LIMIT 1)
+  `).run("f".repeat(64))],
+  ["lane changed", db => db.prepare(`
+    UPDATE recall_candidate_terms
+    SET lane = ?
+    WHERE rowid = (SELECT rowid FROM recall_candidate_terms LIMIT 1)
+  `).run("ALTERED_LANE")],
+  ["term changed", db => db.prepare(`
+    UPDATE recall_candidate_terms
+    SET term = term || ?
+    WHERE rowid = (SELECT rowid FROM recall_candidate_terms LIMIT 1)
+  `).run("-altered")],
+]) {
+  test(`P8-P1 refuses Unicode candidate posting when one tuple is ${label}`, t => withDb(t, dbPath => {
+    seedUnicodeCandidateDatabase(dbPath);
+    const db = new DatabaseSync(dbPath);
+    mutate(db);
+    db.close();
+
+    assert.throws(
+      () => new PersistentLexicalIndex({ path: dbPath }),
+      /recall candidate term integrity mismatch/
+    );
+  }));
 }
 
 test("P8-P1 persists integrity-bound normalized recall candidate postings", t => withDb(t, dbPath => {

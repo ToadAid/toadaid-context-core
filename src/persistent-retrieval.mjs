@@ -119,6 +119,57 @@ function parseJson(text, label) {
   }
 }
 
+function recallCandidatePostingKey(
+  chunkId,
+  lane,
+  term,
+  candidateDigest
+) {
+  return JSON.stringify([
+    chunkId,
+    lane,
+    term,
+    candidateDigest,
+  ]);
+}
+
+function recallCandidatePostingSetsMatch(
+  actualTerms,
+  expectedPostings
+) {
+  if (actualTerms.length !== expectedPostings.length) {
+    return false;
+  }
+
+  const actualKeys = new Set(
+    actualTerms.map(term =>
+      recallCandidatePostingKey(
+        term.chunk_id,
+        term.lane,
+        term.term,
+        term.candidate_digest
+      )
+    )
+  );
+  const expectedKeys = new Set(
+    expectedPostings.map(posting =>
+      recallCandidatePostingKey(
+        posting.chunkId,
+        posting.lane,
+        posting.term,
+        posting.candidateDigest
+      )
+    )
+  );
+
+  return (
+    actualKeys.size === actualTerms.length &&
+    expectedKeys.size === expectedPostings.length &&
+    [...actualKeys].every(key => expectedKeys.has(key)) &&
+    [...expectedKeys].every(key => actualKeys.has(key))
+  );
+}
+
 export class PersistentLexicalIndex {
   constructor({ path, k1 = 1.2, b = 0.75 } = {}) {
     if (!path || typeof path !== "string") {
@@ -670,7 +721,6 @@ export class PersistentLexicalIndex {
       SELECT chunk_id, lane, term, candidate_digest
       FROM recall_candidate_terms
       WHERE chunk_id = ?
-      ORDER BY lane ASC, term ASC, chunk_id ASC
     `);
 
     for (const row of rows) {
@@ -735,19 +785,7 @@ export class PersistentLexicalIndex {
       }
 
       const actualTerms = selectTerms.all(row.chunk_id);
-      const expectedTerms = expected.postings.map(posting => ({
-        chunk_id: posting.chunkId,
-        lane: posting.lane,
-        term: posting.term,
-        candidate_digest: posting.candidateDigest,
-      }));
-      if (
-        actualTerms.length !== expectedTerms.length ||
-        actualTerms.some((actual, index) => {
-          const wanted = expectedTerms[index];
-          return actual.chunk_id !== wanted.chunk_id || actual.lane !== wanted.lane || actual.term !== wanted.term || actual.candidate_digest !== wanted.candidate_digest;
-        })
-      ) {
+      if (!recallCandidatePostingSetsMatch(actualTerms, expected.postings)) {
         throw new ContextCoreError(`stored recall candidate term integrity mismatch for ${row.chunk_id}`);
       }
     }
@@ -1886,10 +1924,6 @@ export class PersistentLexicalIndex {
           candidate_digest
         FROM recall_candidate_terms
         WHERE chunk_id = ?
-        ORDER BY
-          lane ASC,
-          term ASC,
-          chunk_id ASC
       `);
 
     const documents = [];
@@ -2125,39 +2159,10 @@ export class PersistentLexicalIndex {
           row.chunk_id
         );
 
-      const expectedTerms =
-        expectedCandidate.postings.map(
-          posting => ({
-            chunk_id:
-              posting.chunkId,
-            lane:
-              posting.lane,
-            term:
-              posting.term,
-            candidate_digest:
-              posting.candidateDigest,
-          })
-        );
-
       if (
-        actualTerms.length !==
-          expectedTerms.length ||
-        actualTerms.some(
-          (actual, index) => {
-            const wanted =
-              expectedTerms[index];
-
-            return (
-              actual.chunk_id !==
-                wanted.chunk_id ||
-              actual.lane !==
-                wanted.lane ||
-              actual.term !==
-                wanted.term ||
-              actual.candidate_digest !==
-                wanted.candidate_digest
-            );
-          }
+        !recallCandidatePostingSetsMatch(
+          actualTerms,
+          expectedCandidate.postings
         )
       ) {
         throw new ContextCoreError(
