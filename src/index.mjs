@@ -18,6 +18,8 @@ export {
   verifyContextIngressReceipt,
   buildContextRetrievalDebitReceipt,
   verifyContextRetrievalDebitReceipt,
+  buildContextReferenceRecoveryDebitReceipt,
+  verifyContextReferenceRecoveryDebitReceipt,
   buildContextSessionSavingsLedger,
   aggregateContextSavingsLedgers,
   verifyContextSavingsLedger,

@@ -707,6 +707,202 @@ export function verifyContextRetrievalDebitReceipt(
 }
 
 
+
+function referenceRecoveryReceiptProjection(receipt) {
+  return {
+    version: receipt.version,
+    kind: receipt.kind,
+    eventId: receipt.eventId ?? null,
+    observedAt: receipt.observedAt ?? null,
+    sourceId: receipt.sourceId,
+    classification: receipt.classification,
+    sourceContentDigest:
+      receipt.sourceContentDigest,
+    returnedBytes: receipt.returnedBytes,
+    returnedContentDigest:
+      receipt.returnedContentDigest,
+    metadataDigest: receipt.metadataDigest,
+    receiptDigest: receipt.receiptDigest,
+  };
+}
+
+function validateResolvedSourceReference(resolved) {
+  if (
+    !resolved ||
+    typeof resolved !== "object" ||
+    resolved.version !== 1 ||
+    resolved.kind !== "RESOLVED_SOURCE_REFERENCE"
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference identity is invalid"
+    );
+  }
+
+  if (
+    typeof resolved.sourceId !== "string" ||
+    resolved.sourceId.length === 0
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference sourceId is invalid"
+    );
+  }
+
+  if (
+    typeof resolved.classification !== "string" ||
+    resolved.classification.length === 0
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference classification is invalid"
+    );
+  }
+
+  if (typeof resolved.content !== "string") {
+    throw new ContextCoreError(
+      "resolved source reference content must be a string"
+    );
+  }
+
+  assertSha256(
+    "resolved source reference contentDigest",
+    resolved.contentDigest
+  );
+  assertNonNegativeInteger(
+    "resolved source reference bytes",
+    resolved.bytes
+  );
+
+  const returnedBytes =
+    bytes(resolved.content);
+
+  if (returnedBytes !== resolved.bytes) {
+    throw new ContextCoreError(
+      "resolved source reference byte measurement mismatch"
+    );
+  }
+
+  const returnedContentDigest =
+    sha256(resolved.content);
+
+  if (
+    returnedContentDigest !==
+    resolved.contentDigest
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference content digest mismatch"
+    );
+  }
+
+  if (
+    !resolved.metadata ||
+    typeof resolved.metadata !== "object" ||
+    Array.isArray(resolved.metadata)
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference metadata must be an object"
+    );
+  }
+
+  return {
+    returnedBytes,
+    returnedContentDigest,
+    metadataDigest:
+      sha256(JSON.stringify(resolved.metadata)),
+  };
+}
+
+/**
+ * Build the debit proof for exact omitted bytes that a host chooses to
+ * return to model-facing context after resolveContextReference(...).
+ *
+ * Resolution itself does not mint this receipt automatically because a host
+ * may inspect recovered bytes without re-injecting them. The host builds and
+ * persists this receipt only at the actual context-return boundary.
+ */
+export function buildContextReferenceRecoveryDebitReceipt(
+  resolved,
+  {
+    eventId = null,
+    observedAt = null,
+  } = {}
+) {
+  const normalizedEventId =
+    optionalString("eventId", eventId);
+  const normalizedObservedAt =
+    optionalString("observedAt", observedAt);
+
+  const proof =
+    validateResolvedSourceReference(resolved);
+
+  if (proof.returnedBytes <= 0) {
+    throw new ContextCoreError(
+      "context reference recovery debit must be positive"
+    );
+  }
+
+  const payload = {
+    version: 1,
+    kind:
+      "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT",
+    eventId: normalizedEventId,
+    observedAt: normalizedObservedAt,
+    sourceId: resolved.sourceId,
+    classification: resolved.classification,
+    sourceContentDigest:
+      resolved.contentDigest,
+    returnedBytes:
+      proof.returnedBytes,
+    returnedContentDigest:
+      proof.returnedContentDigest,
+    metadataDigest:
+      proof.metadataDigest,
+  };
+
+  return Object.freeze({
+    ...payload,
+    receiptDigest:
+      sha256(JSON.stringify(payload)),
+  });
+}
+
+export function verifyContextReferenceRecoveryDebitReceipt(
+  resolved,
+  receipt
+) {
+  if (!receipt || typeof receipt !== "object") {
+    throw new ContextCoreError(
+      "context reference recovery debit receipt must be an object"
+    );
+  }
+
+  const rebuilt =
+    buildContextReferenceRecoveryDebitReceipt(
+      resolved,
+      {
+        eventId:
+          receipt.eventId ?? null,
+        observedAt:
+          receipt.observedAt ?? null,
+      }
+    );
+
+  const expected =
+    JSON.stringify(
+      referenceRecoveryReceiptProjection(rebuilt)
+    );
+  const actual =
+    JSON.stringify(
+      referenceRecoveryReceiptProjection(receipt)
+    );
+
+  if (actual !== expected) {
+    throw new ContextCoreError(
+      "context reference recovery debit receipt verification failed"
+    );
+  }
+
+  return true;
+}
+
 function uniqueDigests(label, values) {
   const seen = new Set();
   for (const value of values) {
@@ -779,7 +975,7 @@ function ingressReceiptPayloadForLedger(receipt) {
   return payload;
 }
 
-function retrievalReceiptPayloadForLedger(receipt) {
+function semanticRetrievalReceiptPayloadForLedger(receipt) {
   if (!receipt || typeof receipt !== "object" || receipt.version !== 1 ||
       receipt.kind !== "CONTEXT_RETRIEVAL_DEBIT_RECEIPT") {
     throw new ContextCoreError("ledger retrieval receipt identity is invalid");
@@ -836,6 +1032,119 @@ function retrievalReceiptPayloadForLedger(receipt) {
     throw new ContextCoreError("ledger retrieval receipt digest mismatch");
   }
   return payload;
+}
+
+
+function referenceRecoveryReceiptPayloadForLedger(receipt) {
+  if (
+    !receipt ||
+    typeof receipt !== "object" ||
+    receipt.version !== 1 ||
+    receipt.kind !==
+      "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT"
+  ) {
+    throw new ContextCoreError(
+      "ledger reference recovery receipt identity is invalid"
+    );
+  }
+
+  if (
+    typeof receipt.sourceId !== "string" ||
+    receipt.sourceId.length === 0
+  ) {
+    throw new ContextCoreError(
+      "ledger reference recovery sourceId is invalid"
+    );
+  }
+
+  if (
+    typeof receipt.classification !== "string" ||
+    receipt.classification.length === 0
+  ) {
+    throw new ContextCoreError(
+      "ledger reference recovery classification is invalid"
+    );
+  }
+
+  assertSha256(
+    "ledger reference recovery sourceContentDigest",
+    receipt.sourceContentDigest
+  );
+  assertSha256(
+    "ledger reference recovery returnedContentDigest",
+    receipt.returnedContentDigest
+  );
+  assertSha256(
+    "ledger reference recovery metadataDigest",
+    receipt.metadataDigest
+  );
+  assertNonNegativeInteger(
+    "ledger reference recovery returnedBytes",
+    receipt.returnedBytes
+  );
+
+  if (receipt.returnedBytes <= 0) {
+    throw new ContextCoreError(
+      "ledger reference recovery debit must be positive"
+    );
+  }
+
+  if (
+    receipt.sourceContentDigest !==
+    receipt.returnedContentDigest
+  ) {
+    throw new ContextCoreError(
+      "ledger reference recovery content digest mismatch"
+    );
+  }
+
+  const payload = {
+    version: receipt.version,
+    kind: receipt.kind,
+    eventId: receipt.eventId ?? null,
+    observedAt: receipt.observedAt ?? null,
+    sourceId: receipt.sourceId,
+    classification: receipt.classification,
+    sourceContentDigest:
+      receipt.sourceContentDigest,
+    returnedBytes:
+      receipt.returnedBytes,
+    returnedContentDigest:
+      receipt.returnedContentDigest,
+    metadataDigest:
+      receipt.metadataDigest,
+  };
+
+  assertSha256(
+    "ledger reference recovery receiptDigest",
+    receipt.receiptDigest
+  );
+
+  if (
+    sha256(JSON.stringify(payload)) !==
+    receipt.receiptDigest
+  ) {
+    throw new ContextCoreError(
+      "ledger reference recovery receipt digest mismatch"
+    );
+  }
+
+  return payload;
+}
+
+function retrievalReceiptPayloadForLedger(receipt) {
+  if (
+    receipt?.kind ===
+    "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT"
+  ) {
+    return referenceRecoveryReceiptPayloadForLedger(
+      receipt
+    );
+  }
+
+  return semanticRetrievalReceiptPayloadForLedger(
+    receipt
+  );
 }
 
 function savingsSplit(grossBytesAvoided, retrievalBytes) {
@@ -1361,13 +1670,25 @@ function validateContextSavingsReport(report) {
     );
   }
 
+  const legacyReturnBasis =
+    report.retrievalBasis ===
+      "SERIALIZED_RESPONSE_RETURNED_TO_CALLER" &&
+    report.netBasis ===
+      "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT";
+
+  const proofCarryingReturnBasis =
+    report.retrievalBasis ===
+      "PROOF_CARRYING_CONTEXT_RETURN_DEBITS" &&
+    report.netBasis ===
+      "GROSS_DIVERSION_MINUS_CONTEXT_RETURN_DEBIT";
+
   if (
     report.ingressBasis !==
       "PROOF_CARRYING_INGRESS_RECEIPTS" ||
-    report.retrievalBasis !==
-      "SERIALIZED_RESPONSE_RETURNED_TO_CALLER" ||
-    report.netBasis !==
-      "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT" ||
+    (
+      !legacyReturnBasis &&
+      !proofCarryingReturnBasis
+    ) ||
     report.claimBoundary !==
       "BYTE_ACCOUNTING_ONLY"
   ) {
@@ -1653,6 +1974,13 @@ export function buildContextSavingsReport(
   const normalizedObservedAt =
     optionalString("observedAt", observedAt);
 
+  const hasReferenceRecoveryDebit =
+    retrievalReceipts.some(
+      receipt =>
+        receipt?.kind ===
+          "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT"
+    );
+
   const payload = {
     version: 1,
     kind: "CONTEXT_SAVINGS_REPORT",
@@ -1670,9 +1998,13 @@ export function buildContextSavingsReport(
     ingressBasis:
       "PROOF_CARRYING_INGRESS_RECEIPTS",
     retrievalBasis:
-      "SERIALIZED_RESPONSE_RETURNED_TO_CALLER",
+      hasReferenceRecoveryDebit
+        ? "PROOF_CARRYING_CONTEXT_RETURN_DEBITS"
+        : "SERIALIZED_RESPONSE_RETURNED_TO_CALLER",
     netBasis:
-      "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT",
+      hasReferenceRecoveryDebit
+        ? "GROSS_DIVERSION_MINUS_CONTEXT_RETURN_DEBIT"
+        : "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT",
     claimBoundary: "BYTE_ACCOUNTING_ONLY",
     ingressReceiptCount:
       ingressReceiptDigests.length,

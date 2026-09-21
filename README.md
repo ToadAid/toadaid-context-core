@@ -233,6 +233,25 @@ const exact = resolveContextReference({
 
 Resolution is read-only, digest-verified, restart-safe with `PersistentLexicalIndex`, and returns the exact original source bytes plus stored provenance metadata. A changed digest, classification, byte count, or missing source fails closed.
 
+Resolution alone does **not** claim that recovered bytes re-entered model context. If the host actually returns those exact recovered bytes to the model, it can mint a proof-carrying debit at that boundary:
+
+```js
+import {
+  buildContextReferenceRecoveryDebitReceipt,
+  verifyContextReferenceRecoveryDebitReceipt,
+} from "@toadaid/context-core";
+
+const debit =
+  buildContextReferenceRecoveryDebitReceipt(exact);
+
+verifyContextReferenceRecoveryDebitReceipt(
+  exact,
+  debit,
+);
+```
+
+That debit is accepted by the existing session savings ledger alongside semantic retrieval debits. This closes the accounting loop: diversion receives measured credit; later exact recovery receives measured payback. A host that only inspects recovered bytes and does not re-inject them should not mint the debit.
+
 For bounded semantic recall across deferred material, use lexical retrieval:
 
 ```js
