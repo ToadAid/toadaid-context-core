@@ -1,14 +1,17 @@
 name: pr-verify
 
-# Runs ONLY on pull_request events.
+# Untrusted pull-request verification.
 #
-# Trust boundary: this workflow executes untrusted PR source code.
-# It MUST run exclusively on GitHub-hosted ephemeral infrastructure.
-# It MUST NOT use self-hosted runners, expose secrets, or call
-# privileged infrastructure.
+# Public release policy:
+# - GitHub-hosted ephemeral infrastructure only.
+# - No self-hosted runners.
+# - No secrets.
+# - No pull_request_target.
+# - Read-only repository permission.
+# - Checkout credentials are not persisted.
 #
-# The self-hosted HP runner (see ci.yml) is reserved for trusted
-# push-to-main and explicit workflow_dispatch verification only.
+# This workflow is intentionally active while the repository is still private
+# so the release workflow migration can prove itself before the public flip.
 
 on:
   pull_request:
@@ -19,11 +22,6 @@ permissions:
 jobs:
   pr-verify:
     name: PR verification (GitHub-hosted)
-    # While this repository is private, trusted verification is performed
-    # explicitly through ci.yml workflow_dispatch on the self-hosted HP runner.
-    # Once the repository is public, untrusted PR verification activates here
-    # automatically and remains GitHub-hosted only.
-    if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,7 +35,6 @@ jobs:
 
       - name: Set up Node.js
         # actions/setup-node v7.0.0
-        # Node 22 is current LTS (active LTS since Oct 2024); satisfies engines.node >=20.
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
