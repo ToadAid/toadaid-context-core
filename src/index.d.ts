@@ -531,6 +531,37 @@ export function verifyContextRetrievalDebitReceipt(
   receipt: ContextRetrievalDebitReceipt
 ): true;
 
+export type ContextReferenceRecoveryDebitReceipt = Readonly<{
+  version: 1;
+  kind: "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT";
+  eventId: string | null;
+  observedAt: string | null;
+  sourceId: string;
+  classification: ContextClassValue;
+  sourceContentDigest: string;
+  returnedBytes: number;
+  returnedContentDigest: string;
+  metadataDigest: string;
+  receiptDigest: string;
+}>;
+
+export function buildContextReferenceRecoveryDebitReceipt(
+  resolved: ResolvedLexicalSource,
+  options?: Readonly<{
+    eventId?: string | null;
+    observedAt?: string | null;
+  }>
+): ContextReferenceRecoveryDebitReceipt;
+
+export function verifyContextReferenceRecoveryDebitReceipt(
+  resolved: ResolvedLexicalSource,
+  receipt: ContextReferenceRecoveryDebitReceipt
+): true;
+
+export type ContextReturnDebitReceipt =
+  | ContextRetrievalDebitReceipt
+  | ContextReferenceRecoveryDebitReceipt;
+
 export type ContextSavingsLedger = Readonly<{
   version: 1;
   kind: "CONTEXT_SAVINGS_LEDGER";
@@ -556,7 +587,7 @@ export function buildContextSessionSavingsLedger(
   input: Readonly<{
     scopeId: string;
     ingressReceipts?: readonly ContextIngressReceipt[];
-    retrievalReceipts?: readonly ContextRetrievalDebitReceipt[];
+    retrievalReceipts?: readonly ContextReturnDebitReceipt[];
   }>,
   options?: Readonly<{
     eventId?: string | null;
@@ -591,8 +622,12 @@ export type ContextSavingsReport = Readonly<{
   status: "SAVINGS" | "ADDED_BYTES" | "NEUTRAL";
   unit: "UTF8_BYTES";
   ingressBasis: "PROOF_CARRYING_INGRESS_RECEIPTS";
-  retrievalBasis: "SERIALIZED_RESPONSE_RETURNED_TO_CALLER";
-  netBasis: "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT";
+  retrievalBasis:
+    | "SERIALIZED_RESPONSE_RETURNED_TO_CALLER"
+    | "PROOF_CARRYING_CONTEXT_RETURN_DEBITS";
+  netBasis:
+    | "GROSS_DIVERSION_MINUS_RETRIEVAL_RESPONSE_DEBIT"
+    | "GROSS_DIVERSION_MINUS_CONTEXT_RETURN_DEBIT";
   claimBoundary: "BYTE_ACCOUNTING_ONLY";
   ingressReceiptCount: number;
   retrievalReceiptCount: number;
@@ -614,7 +649,7 @@ export function buildContextSavingsReport(
   input: Readonly<{
     ledger: ContextSavingsLedger;
     ingressReceipts?: readonly ContextIngressReceipt[];
-    retrievalReceipts?: readonly ContextRetrievalDebitReceipt[];
+    retrievalReceipts?: readonly ContextReturnDebitReceipt[];
   }>,
   options?: Readonly<{
     eventId?: string | null;
