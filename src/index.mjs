@@ -10,7 +10,7 @@ export { ContextEventKind, PersistentSessionJournal } from "./session-events.mjs
 export { buildResumePacket } from "./resume-packet.mjs";
 export { buildContinuityHandoff, buildContinuityTransport } from "./continuity-handoff.mjs";
 export { prepareContextIngress } from "./ingress.mjs";
-export { resolveContextReference } from "./context-reference.mjs";
+export { resolveContextReference, resolveContextReferenceRange } from "./context-reference.mjs";
 export { prepareToolOutputIngress } from "./tool-output.mjs";
 export { evaluateRetrievalQuality } from "./retrieval-quality.mjs";
 export {
@@ -20,6 +20,8 @@ export {
   verifyContextRetrievalDebitReceipt,
   buildContextReferenceRecoveryDebitReceipt,
   verifyContextReferenceRecoveryDebitReceipt,
+  buildContextReferencePartialRecoveryDebitReceipt,
+  verifyContextReferencePartialRecoveryDebitReceipt,
   buildContextSessionSavingsLedger,
   aggregateContextSavingsLedgers,
   verifyContextSavingsLedger,

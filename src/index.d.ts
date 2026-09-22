@@ -443,6 +443,34 @@ export function resolveContextReference(
   }>
 ): ResolvedLexicalSource;
 
+export type ResolvedContextReferenceRange = Readonly<{
+  version: 1;
+  kind: "RESOLVED_SOURCE_REFERENCE_RANGE";
+  sourceId: string;
+  classification: ContextClassValue;
+  sourceContentDigest: string;
+  sourceBytes: number;
+  startByte: number;
+  endByte: number;
+  returnedBytes: number;
+  returnedContentDigest: string;
+  content: string;
+  complete: boolean;
+  metadata: Readonly<Record<string, JsonValue>>;
+}>;
+
+export function resolveContextReferenceRange(
+  input: Readonly<{
+    retrieval: Pick<
+      PersistentLexicalIndex,
+      "resolveSourceReference"
+    >;
+    reference: string | ContextReferenceMarker;
+    startByte?: number;
+    maxBytes?: number;
+  }>
+): ResolvedContextReferenceRange;
+
 export type ToolOutputIngressResult = Readonly<{
   version: 1;
   kind: "TOOL_OUTPUT_INGRESS";
@@ -570,9 +598,41 @@ export function verifyContextReferenceRecoveryDebitReceipt(
   receipt: ContextReferenceRecoveryDebitReceipt
 ): true;
 
+export type ContextReferencePartialRecoveryDebitReceipt = Readonly<{
+  version: 1;
+  kind: "CONTEXT_REFERENCE_PARTIAL_RECOVERY_DEBIT_RECEIPT";
+  eventId: string | null;
+  observedAt: string | null;
+  sourceId: string;
+  classification: ContextClassValue;
+  sourceContentDigest: string;
+  sourceBytes: number;
+  startByte: number;
+  endByte: number;
+  complete: boolean;
+  returnedBytes: number;
+  returnedContentDigest: string;
+  metadataDigest: string;
+  receiptDigest: string;
+}>;
+
+export function buildContextReferencePartialRecoveryDebitReceipt(
+  resolvedRange: ResolvedContextReferenceRange,
+  options?: Readonly<{
+    eventId?: string | null;
+    observedAt?: string | null;
+  }>
+): ContextReferencePartialRecoveryDebitReceipt;
+
+export function verifyContextReferencePartialRecoveryDebitReceipt(
+  resolvedRange: ResolvedContextReferenceRange,
+  receipt: ContextReferencePartialRecoveryDebitReceipt
+): true;
+
 export type ContextReturnDebitReceipt =
   | ContextRetrievalDebitReceipt
-  | ContextReferenceRecoveryDebitReceipt;
+  | ContextReferenceRecoveryDebitReceipt
+  | ContextReferencePartialRecoveryDebitReceipt;
 
 export type ContextSavingsLedger = Readonly<{
   version: 1;
