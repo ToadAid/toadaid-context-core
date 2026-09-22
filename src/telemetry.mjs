@@ -903,6 +903,236 @@ export function verifyContextReferenceRecoveryDebitReceipt(
   return true;
 }
 
+
+function partialReferenceRecoveryReceiptProjection(receipt) {
+  return {
+    version: receipt.version,
+    kind: receipt.kind,
+    eventId: receipt.eventId ?? null,
+    observedAt: receipt.observedAt ?? null,
+    sourceId: receipt.sourceId,
+    classification: receipt.classification,
+    sourceContentDigest:
+      receipt.sourceContentDigest,
+    sourceBytes: receipt.sourceBytes,
+    startByte: receipt.startByte,
+    endByte: receipt.endByte,
+    complete: receipt.complete,
+    returnedBytes: receipt.returnedBytes,
+    returnedContentDigest:
+      receipt.returnedContentDigest,
+    metadataDigest: receipt.metadataDigest,
+    receiptDigest: receipt.receiptDigest,
+  };
+}
+
+function validateResolvedSourceReferenceRange(resolvedRange) {
+  if (
+    !resolvedRange ||
+    typeof resolvedRange !== "object" ||
+    resolvedRange.version !== 1 ||
+    resolvedRange.kind !==
+      "RESOLVED_SOURCE_REFERENCE_RANGE"
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range identity is invalid"
+    );
+  }
+
+  if (
+    typeof resolvedRange.sourceId !== "string" ||
+    resolvedRange.sourceId.length === 0
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range sourceId is invalid"
+    );
+  }
+
+  if (
+    typeof resolvedRange.classification !== "string" ||
+    resolvedRange.classification.length === 0
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range classification is invalid"
+    );
+  }
+
+  assertSha256(
+    "resolved source reference range sourceContentDigest",
+    resolvedRange.sourceContentDigest
+  );
+  assertSha256(
+    "resolved source reference range returnedContentDigest",
+    resolvedRange.returnedContentDigest
+  );
+  assertNonNegativeInteger(
+    "resolved source reference range sourceBytes",
+    resolvedRange.sourceBytes
+  );
+  assertNonNegativeInteger(
+    "resolved source reference range startByte",
+    resolvedRange.startByte
+  );
+  assertNonNegativeInteger(
+    "resolved source reference range endByte",
+    resolvedRange.endByte
+  );
+  assertNonNegativeInteger(
+    "resolved source reference range returnedBytes",
+    resolvedRange.returnedBytes
+  );
+
+  if (
+    resolvedRange.startByte >= resolvedRange.endByte ||
+    resolvedRange.endByte > resolvedRange.sourceBytes
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range bounds are invalid"
+    );
+  }
+
+  if (
+    resolvedRange.returnedBytes !==
+      resolvedRange.endByte - resolvedRange.startByte
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range byte accounting mismatch"
+    );
+  }
+
+  if (
+    typeof resolvedRange.content !== "string" ||
+    bytes(resolvedRange.content) !==
+      resolvedRange.returnedBytes
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range content byte measurement mismatch"
+    );
+  }
+
+  if (
+    sha256(resolvedRange.content) !==
+      resolvedRange.returnedContentDigest
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range returned content digest mismatch"
+    );
+  }
+
+  if (
+    typeof resolvedRange.complete !== "boolean" ||
+    resolvedRange.complete !==
+      (resolvedRange.endByte === resolvedRange.sourceBytes)
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range completion flag mismatch"
+    );
+  }
+
+  if (
+    !resolvedRange.metadata ||
+    typeof resolvedRange.metadata !== "object" ||
+    Array.isArray(resolvedRange.metadata)
+  ) {
+    throw new ContextCoreError(
+      "resolved source reference range metadata must be an object"
+    );
+  }
+
+  return {
+    metadataDigest:
+      sha256(JSON.stringify(resolvedRange.metadata)),
+  };
+}
+
+export function buildContextReferencePartialRecoveryDebitReceipt(
+  resolvedRange,
+  {
+    eventId = null,
+    observedAt = null,
+  } = {}
+) {
+  const normalizedEventId =
+    optionalString("eventId", eventId);
+  const normalizedObservedAt =
+    optionalString("observedAt", observedAt);
+  const proof =
+    validateResolvedSourceReferenceRange(resolvedRange);
+
+  if (resolvedRange.returnedBytes <= 0) {
+    throw new ContextCoreError(
+      "context reference partial recovery debit must be positive"
+    );
+  }
+
+  const payload = {
+    version: 1,
+    kind:
+      "CONTEXT_REFERENCE_PARTIAL_RECOVERY_DEBIT_RECEIPT",
+    eventId: normalizedEventId,
+    observedAt: normalizedObservedAt,
+    sourceId: resolvedRange.sourceId,
+    classification:
+      resolvedRange.classification,
+    sourceContentDigest:
+      resolvedRange.sourceContentDigest,
+    sourceBytes: resolvedRange.sourceBytes,
+    startByte: resolvedRange.startByte,
+    endByte: resolvedRange.endByte,
+    complete: resolvedRange.complete,
+    returnedBytes:
+      resolvedRange.returnedBytes,
+    returnedContentDigest:
+      resolvedRange.returnedContentDigest,
+    metadataDigest:
+      proof.metadataDigest,
+  };
+
+  return Object.freeze({
+    ...payload,
+    receiptDigest:
+      sha256(JSON.stringify(payload)),
+  });
+}
+
+export function verifyContextReferencePartialRecoveryDebitReceipt(
+  resolvedRange,
+  receipt
+) {
+  if (!receipt || typeof receipt !== "object") {
+    throw new ContextCoreError(
+      "context reference partial recovery debit receipt must be an object"
+    );
+  }
+
+  const rebuilt =
+    buildContextReferencePartialRecoveryDebitReceipt(
+      resolvedRange,
+      {
+        eventId: receipt.eventId ?? null,
+        observedAt: receipt.observedAt ?? null,
+      }
+    );
+
+  const expected =
+    JSON.stringify(
+      partialReferenceRecoveryReceiptProjection(rebuilt)
+    );
+  const actual =
+    JSON.stringify(
+      partialReferenceRecoveryReceiptProjection(receipt)
+    );
+
+  if (actual !== expected) {
+    throw new ContextCoreError(
+      "context reference partial recovery debit receipt verification failed"
+    );
+  }
+
+  return true;
+}
+
+
 function uniqueDigests(label, values) {
   const seen = new Set();
   for (const value of values) {
@@ -1132,12 +1362,140 @@ function referenceRecoveryReceiptPayloadForLedger(receipt) {
   return payload;
 }
 
+
+function partialReferenceRecoveryReceiptPayloadForLedger(receipt) {
+  if (
+    !receipt ||
+    typeof receipt !== "object" ||
+    receipt.version !== 1 ||
+    receipt.kind !==
+      "CONTEXT_REFERENCE_PARTIAL_RECOVERY_DEBIT_RECEIPT"
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery receipt identity is invalid"
+    );
+  }
+
+  if (
+    typeof receipt.sourceId !== "string" ||
+    receipt.sourceId.length === 0
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery sourceId is invalid"
+    );
+  }
+
+  if (
+    typeof receipt.classification !== "string" ||
+    receipt.classification.length === 0
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery classification is invalid"
+    );
+  }
+
+  assertSha256(
+    "ledger partial reference recovery sourceContentDigest",
+    receipt.sourceContentDigest
+  );
+  assertSha256(
+    "ledger partial reference recovery returnedContentDigest",
+    receipt.returnedContentDigest
+  );
+  assertSha256(
+    "ledger partial reference recovery metadataDigest",
+    receipt.metadataDigest
+  );
+
+  for (const [name, value] of [
+    ["sourceBytes", receipt.sourceBytes],
+    ["startByte", receipt.startByte],
+    ["endByte", receipt.endByte],
+    ["returnedBytes", receipt.returnedBytes],
+  ]) {
+    assertNonNegativeInteger(
+      `ledger partial reference recovery ${name}`,
+      value
+    );
+  }
+
+  if (
+    receipt.returnedBytes <= 0 ||
+    receipt.startByte >= receipt.endByte ||
+    receipt.endByte > receipt.sourceBytes ||
+    receipt.returnedBytes !==
+      receipt.endByte - receipt.startByte
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery range accounting is invalid"
+    );
+  }
+
+  if (
+    typeof receipt.complete !== "boolean" ||
+    receipt.complete !==
+      (receipt.endByte === receipt.sourceBytes)
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery completion flag mismatch"
+    );
+  }
+
+  const payload = {
+    version: receipt.version,
+    kind: receipt.kind,
+    eventId: receipt.eventId ?? null,
+    observedAt: receipt.observedAt ?? null,
+    sourceId: receipt.sourceId,
+    classification:
+      receipt.classification,
+    sourceContentDigest:
+      receipt.sourceContentDigest,
+    sourceBytes: receipt.sourceBytes,
+    startByte: receipt.startByte,
+    endByte: receipt.endByte,
+    complete: receipt.complete,
+    returnedBytes:
+      receipt.returnedBytes,
+    returnedContentDigest:
+      receipt.returnedContentDigest,
+    metadataDigest:
+      receipt.metadataDigest,
+  };
+
+  assertSha256(
+    "ledger partial reference recovery receiptDigest",
+    receipt.receiptDigest
+  );
+
+  if (
+    sha256(JSON.stringify(payload)) !==
+      receipt.receiptDigest
+  ) {
+    throw new ContextCoreError(
+      "ledger partial reference recovery receipt digest mismatch"
+    );
+  }
+
+  return payload;
+}
+
+
 function retrievalReceiptPayloadForLedger(receipt) {
   if (
     receipt?.kind ===
     "CONTEXT_REFERENCE_RECOVERY_DEBIT_RECEIPT"
   ) {
     return referenceRecoveryReceiptPayloadForLedger(
+      receipt
+    );
+  }
+
+  if (
+    receipt?.kind ===
+    "CONTEXT_REFERENCE_PARTIAL_RECOVERY_DEBIT_RECEIPT"
+  ) {
+    return partialReferenceRecoveryReceiptPayloadForLedger(
       receipt
     );
   }
