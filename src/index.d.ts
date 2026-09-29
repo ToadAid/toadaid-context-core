@@ -11,6 +11,65 @@ export type ContextClassValue =
 
 export class ContextBudgetExceeded extends Error {}
 
+export type TemporalInstant =
+  | Readonly<{
+      kind: "KNOWN";
+      at: number;
+    }>
+  | Readonly<{
+      kind: "UNKNOWN";
+    }>;
+
+export type TemporalEventTime =
+  | Readonly<{
+      kind: "POINT";
+      at: number;
+    }>
+  | Readonly<{
+      kind: "INTERVAL";
+      startAt: number;
+      endAt: number | null;
+    }>
+  | Readonly<{
+      kind: "UNKNOWN";
+    }>;
+
+export type TemporalValidity =
+  | Readonly<{
+      kind: "POINT";
+      at: number;
+    }>
+  | Readonly<{
+      kind: "INTERVAL";
+      startAt: number;
+      endAt: number | null;
+    }>;
+
+export type TemporalShapeErrorCode =
+  | "INVALID_TEMPORAL_INSTANT"
+  | "INVALID_TEMPORAL_EVENT_TIME"
+  | "INVALID_TEMPORAL_VALIDITY";
+
+export class TemporalShapeError extends Error {
+  constructor(
+    code: TemporalShapeErrorCode,
+    message: string
+  );
+  readonly code: TemporalShapeErrorCode;
+}
+
+export function validateTemporalInstant(
+  value: unknown
+): TemporalInstant;
+
+export function validateTemporalEventTime(
+  value: unknown
+): TemporalEventTime;
+
+export function validateTemporalValidity(
+  value: unknown
+): TemporalValidity;
+
 export const ContextEventKind: Readonly<{
   OBJECTIVE: "OBJECTIVE";
   DECISION: "DECISION";
