@@ -20,6 +20,11 @@ export {
   validateTemporalValidity,
 } from "./temporal.mjs";
 export {
+  BOUNDED_TIMELINE_SCHEMA_VERSION,
+  BoundedTimelineError,
+  queryBoundedTimelineV1,
+} from "./bounded-timeline.mjs";
+export {
   buildContextIngressReceipt,
   verifyContextIngressReceipt,
   buildContextRetrievalDebitReceipt,
