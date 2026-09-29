@@ -70,6 +70,71 @@ export function validateTemporalValidity(
   value: unknown
 ): TemporalValidity;
 
+
+export const BOUNDED_TIMELINE_SCHEMA_VERSION: 1;
+
+export type BoundedTimelineStatusV1 =
+  | "COMPLETE"
+  | "TRUNCATED"
+  | "INCOMPLETE"
+  | "UNAVAILABLE";
+
+export type BoundedTimelineCursorV1 = Readonly<{
+  eventId: string;
+  sourceRows: number;
+}>;
+
+type BoundedTimelineCursorableV1 = Readonly<{
+  limit: number;
+  cursor?: BoundedTimelineCursorV1;
+}>;
+
+export type BoundedTimelineQueryV1 =
+  | (Readonly<{ kind: "RECENT"; }> & BoundedTimelineCursorableV1)
+  | (Readonly<{ kind: "BETWEEN"; fromMs: number; toMs: number; }> & BoundedTimelineCursorableV1)
+  | Readonly<{ kind: "LATEST_BEFORE"; beforeMs: number; }>
+  | (Readonly<{ kind: "RELATIVE_TO_ANCHOR"; anchorMs: number; lookbackMs: number; }> & BoundedTimelineCursorableV1);
+
+export type BoundedTimelineSourceIntegrityV1 = Readonly<{
+  sourceRows: number;
+  corruptRows: number;
+  invalidRows: number;
+  unavailableReason?: string;
+}>;
+
+export type BoundedTimelineEventCoordinateV1 = Readonly<{
+  eventId: string;
+  knownAt: number;
+  observedAt: number;
+  occurredAt: number | null;
+}>;
+
+export type BoundedTimelineResultV1 = Readonly<{
+  schemaVersion: typeof BOUNDED_TIMELINE_SCHEMA_VERSION;
+  artifact: "BoundedTimelineResultV1";
+  status: BoundedTimelineStatusV1;
+  query: BoundedTimelineQueryV1;
+  source: BoundedTimelineSourceIntegrityV1;
+  matchedCount: number;
+  returnedCount: number;
+  truncated: boolean;
+  nextCursor: BoundedTimelineCursorV1 | null;
+  continuation: "STABLE" | "SOURCE_CHANGED";
+  events: readonly BoundedTimelineEventCoordinateV1[];
+  authorityGranted: false;
+}>;
+
+export class BoundedTimelineError extends Error {
+  constructor(message: string);
+  readonly code: "INVALID_BOUNDED_TIMELINE_QUERY";
+}
+
+export function queryBoundedTimelineV1(
+  values: readonly unknown[],
+  query: BoundedTimelineQueryV1,
+  integrity: BoundedTimelineSourceIntegrityV1
+): BoundedTimelineResultV1;
+
 export const ContextEventKind: Readonly<{
   OBJECTIVE: "OBJECTIVE";
   DECISION: "DECISION";
