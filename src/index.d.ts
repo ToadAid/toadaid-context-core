@@ -135,6 +135,79 @@ export function queryBoundedTimelineV1(
   integrity: BoundedTimelineSourceIntegrityV1
 ): BoundedTimelineResultV1;
 
+
+export const TEMPORAL_ANCHOR_SCHEMA_VERSION: "TEMPORAL_ANCHOR_V1";
+export const TEMPORAL_SOURCE_SYSTEM_WALL_CLOCK: "SYSTEM_WALL_CLOCK";
+
+export type TemporalEvidenceStateV1 =
+  | "LOCAL_ONLY"
+  | "EXTERNAL_CONSISTENT"
+  | "EXTERNAL_STALE"
+  | "CLOCK_DRIFT"
+  | "BACKWARD_WALL_CLOCK";
+
+export type TemporalExternalEvidenceV1 = Readonly<{
+  source: string;
+  referenceTimeMs: number;
+  observedAtMs: number;
+  maxAgeMs: number;
+  maxDriftMs: number;
+}>;
+
+export type TemporalIntegrityAnchorInputV1 = Readonly<{
+  timezone: string;
+  nowMs: number;
+  observedAtMs?: number;
+  previousNowMs?: number;
+  externalEvidence?: TemporalExternalEvidenceV1;
+}>;
+
+export type TemporalIntegrityAnchorV1 = Readonly<{
+  schemaVersion: typeof TEMPORAL_ANCHOR_SCHEMA_VERSION;
+  nowMs: number;
+  observedAtMs: number;
+  timezone: string;
+  localDate: string;
+  source: typeof TEMPORAL_SOURCE_SYSTEM_WALL_CLOCK;
+  evidenceState: TemporalEvidenceStateV1;
+  previousNowMs?: number;
+  externalEvidence?: TemporalExternalEvidenceV1;
+  driftMs?: number;
+  todayKey: string;
+  yesterdayKey: string;
+  tomorrowKey: string;
+}>;
+
+export class TemporalAnchorError extends Error {
+  constructor(code: string, message: string);
+  readonly code: string;
+}
+
+export function dayKeyInTz(
+  timezone: string,
+  atMs: number
+): string;
+
+export function localDayStartMs(
+  timezone: string,
+  atMs: number
+): number;
+
+export function civilShift(
+  civilDate: string,
+  days: number
+): string;
+
+export function relativeDateKey(
+  timezone: string,
+  atMs: number,
+  dayOffset: number
+): string;
+
+export function buildTemporalIntegrityAnchorV1(
+  input: TemporalIntegrityAnchorInputV1
+): TemporalIntegrityAnchorV1;
+
 export const ContextEventKind: Readonly<{
   OBJECTIVE: "OBJECTIVE";
   DECISION: "DECISION";

@@ -25,6 +25,16 @@ export {
   queryBoundedTimelineV1,
 } from "./bounded-timeline.mjs";
 export {
+  TEMPORAL_ANCHOR_SCHEMA_VERSION,
+  TEMPORAL_SOURCE_SYSTEM_WALL_CLOCK,
+  TemporalAnchorError,
+  dayKeyInTz,
+  localDayStartMs,
+  civilShift,
+  relativeDateKey,
+  buildTemporalIntegrityAnchorV1,
+} from "./temporal-anchor.mjs";
+export {
   buildContextIngressReceipt,
   verifyContextIngressReceipt,
   buildContextRetrievalDebitReceipt,
