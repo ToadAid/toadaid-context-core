@@ -14,6 +14,12 @@ export { resolveContextReference, resolveContextReferenceRange } from "./context
 export { prepareToolOutputIngress } from "./tool-output.mjs";
 export { evaluateRetrievalQuality } from "./retrieval-quality.mjs";
 export {
+  TemporalShapeError,
+  validateTemporalInstant,
+  validateTemporalEventTime,
+  validateTemporalValidity,
+} from "./temporal.mjs";
+export {
   buildContextIngressReceipt,
   verifyContextIngressReceipt,
   buildContextRetrievalDebitReceipt,
